@@ -1,0 +1,152 @@
+/*
+1. What is the most popular film category?
+List each film category and the number of times that category has been rented out.
+*/
+
+SELECT 
+  c.name AS category_name, 
+  COUNT(*) AS rental_count 
+FROM 
+  film f 
+  JOIN film_category fc ON f.film_id = fc.film_id 
+  JOIN category c ON c.category_id = fc.category_id 
+  JOIN inventory i ON f.film_id = i.film_id 
+  JOIN rental r ON i.inventory_id = r.rental_id 
+GROUP BY 
+  category_name 
+ORDER BY 
+  rental_count;
+
+
+-- 2.Which store has the most rental orders in 2005?
+
+SELECT 
+  s.store_id AS store_id, 
+  COUNT(*) AS rental_orders 
+FROM 
+  rental r 
+  JOIN staff st ON st.staff_id = r.staff_id 
+  JOIN store s ON st.store_id = s.store_id 
+WHERE 
+  DATE_PART('year', r.rental_date) = '2005' 
+GROUP BY 
+  store_id 
+ORDER BY 
+  store_id;
+
+
+-- 3.How many payments did the top 10 customers make on a monthly basis during 2007, and what was the amount of the monthly payments?
+
+-- CTE for Top 10 Paying Customers
+WITH top_10 AS (
+  SELECT 
+    CONCAT(first_name, ' ', last_name) AS full_name 
+  FROM 
+    (
+      SELECT 
+        c.first_name AS first_name, 
+        c.last_name AS last_name, 
+        SUM(p.amount) AS total_amount 
+      FROM 
+        customer c 
+        JOIN payment p ON c.customer_id = p.customer_id 
+      GROUP BY 
+        first_name, 
+        last_name 
+      ORDER BY 
+        total_amount DESC 
+      LIMIT 
+        10
+    ) t1
+), 
+-- CTE for customer details in 2007
+customer AS (
+  SELECT 
+    DATE_TRUNC('month', p.payment_date) AS pay_mon, 
+    CONCAT(c.first_name, ' ', c.last_name) AS full_name, 
+    COUNT(*) AS pay_countpermon, 
+    SUM(p.amount) AS pay_amount 
+  FROM 
+    customer c 
+    JOIN payment p ON c.customer_id = p.customer_id 
+  WHERE 
+    DATE_PART('year', p.payment_date) = '2007' 
+  GROUP BY 
+    pay_mon, 
+    full_name 
+  ORDER BY 
+    full_name, 
+    pay_mon
+) -- Filtering customer with top_10
+SELECT 
+  c.pay_mon, 
+  c.full_name, 
+  c.pay_countpermon, 
+  c.pay_amount 
+FROM 
+  customer c 
+  JOIN top_10 t ON t.full_name = c.full_name 
+ORDER BY 
+  c.full_name, 
+  c.pay_mon
+
+
+-- 4. The difference across the monthly payments for the top 10 customers in 2007.
+
+-- CTE for Top 10 Paying Customers
+WITH top_10 AS (
+  SELECT 
+    CONCAT(first_name, ' ', last_name) AS full_name 
+  FROM 
+    (
+      SELECT 
+        c.first_name AS first_name, 
+        c.last_name AS last_name, 
+        SUM(p.amount) AS total_amount 
+      FROM 
+        customer c 
+        JOIN payment p ON c.customer_id = p.customer_id 
+      GROUP BY 
+        first_name, 
+        last_name 
+      ORDER BY 
+        total_amount DESC 
+      LIMIT 
+        10
+    ) t1
+), 
+-- CTE for customer details in 2007
+customer AS (
+  SELECT 
+    DATE_TRUNC('month', p.payment_date) AS pay_mon, 
+    CONCAT(c.first_name, ' ', c.last_name) AS full_name, 
+    COUNT(*) AS pay_countpermon, 
+    SUM(p.amount) AS pay_amount 
+  FROM 
+    customer c 
+    JOIN payment p ON c.customer_id = p.customer_id 
+  WHERE 
+    DATE_PART('year', p.payment_date) = '2007' 
+  GROUP BY 
+    pay_mon, 
+    full_name 
+  ORDER BY 
+    full_name, 
+    pay_mon
+) -- Filtering customer with top_10 and determining difference across monthly payments
+SELECT 
+  c.pay_mon, 
+  c.full_name, 
+  c.pay_countpermon, 
+  c.pay_amount, 
+  LEAD(c.pay_amount) OVER (
+    PARTITION BY c.full_name 
+    ORDER BY 
+      c.pay_mon
+  ) - c.pay_amount AS lead_difference 
+FROM 
+  customer c 
+  JOIN top_10 t ON t.full_name = c.full_name 
+ORDER BY 
+  c.full_name, 
+  c.pay_mon;  
